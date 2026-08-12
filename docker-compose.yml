@@ -1,0 +1,97 @@
+name: insightforge
+
+services:
+  app-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: insightforge
+      POSTGRES_USER: insightforge
+      POSTGRES_PASSWORD: insightforge_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U insightforge -d insightforge"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  demo-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: demo_ecommerce
+      POSTGRES_USER: demo_admin
+      POSTGRES_PASSWORD: demo_admin_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - demo_db_data:/var/lib/postgresql/data
+      - ./demo-db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+      - ./demo-db/phase2.sql:/docker-entrypoint-initdb.d/002-phase2.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo_admin -d demo_ecommerce"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    environment:
+      APP_ENV: development
+      APP_DATABASE_URL: postgresql+psycopg://insightforge:insightforge_dev@app-db:5432/insightforge
+      SECRET_ENCRYPTION_KEY: 7B1wI_gfTi94x_6crw4VBbg4FPVkudmkx5zeO0oBHho=
+      EXTERNAL_DB_CONNECT_TIMEOUT_SECONDS: 5
+      QUERY_MAX_ROWS: 1000
+      QUERY_TIMEOUT_SECONDS: 10
+      QUERY_MAX_SQL_LENGTH: 20000
+      QUERY_MAX_JOINS: 8
+      QUERY_MAX_RESULT_BYTES: 1000000
+    ports:
+      - "8000:8000"
+    depends_on:
+      app-db:
+        condition: service_healthy
+      demo-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  tests:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: test
+    environment:
+      APP_ENV: testing
+      APP_DATABASE_URL: postgresql+psycopg://insightforge:insightforge_dev@app-db:5432/insightforge_test
+      SECRET_ENCRYPTION_KEY: 7B1wI_gfTi94x_6crw4VBbg4FPVkudmkx5zeO0oBHho=
+      QUERY_MAX_ROWS: 1000
+      QUERY_TIMEOUT_SECONDS: 2
+      QUERY_MAX_SQL_LENGTH: 20000
+      QUERY_MAX_JOINS: 8
+      QUERY_MAX_RESULT_BYTES: 1000000
+      RUN_POSTGRES_INTEGRATION_TESTS: "1"
+      TEST_EXTERNAL_DB_HOST: demo-db
+      TEST_EXTERNAL_DB_PORT: "5432"
+      TEST_EXTERNAL_DB_NAME: demo_ecommerce
+      TEST_EXTERNAL_DB_USER: dashboard_reader
+      TEST_EXTERNAL_DB_PASSWORD: dashboard_reader_dev
+      TEST_EXTERNAL_DB_SSL_MODE: disable
+    working_dir: /workspace
+    volumes:
+      - ./backend:/workspace
+    depends_on:
+      demo-db:
+        condition: service_healthy
+
+volumes:
+  app_db_data:
+  demo_db_data:

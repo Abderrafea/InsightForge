@@ -1,0 +1,1 @@
+"""InsightForge backend application package."""

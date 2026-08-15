@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.models.agent_run import AgentRun
     from app.models.dashboard import Dashboard
     from app.models.database_connection import DatabaseConnection
     from app.models.message import Message
@@ -49,4 +50,7 @@ class Session(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     query_executions: Mapped[list[QueryExecution]] = relationship(
         back_populates="session", passive_deletes=True, lazy="raise"
+    )
+    agent_runs: Mapped[list[AgentRun]] = relationship(
+        back_populates="session", cascade="all, delete-orphan", lazy="raise"
     )

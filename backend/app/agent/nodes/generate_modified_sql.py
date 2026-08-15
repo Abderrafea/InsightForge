@@ -1,0 +1,33 @@
+from langgraph.runtime import Runtime
+
+from app.agent.models import SQLGenerationResult
+from app.agent.nodes.classify_change import affected_query_ids
+from app.agent.prompts.change_sql_generator import build_change_sql_messages
+from app.agent.runtime import AgentRuntime
+from app.agent.state import AgentState
+
+
+async def generate_modified_sql(
+    state: AgentState, runtime: Runtime[AgentRuntime]
+) -> dict[str, object]:
+    is_retry = bool(state.get("validation_errors"))
+    current_dashboard = state["current_dashboard"]
+    if current_dashboard is None:
+        return {"generated_queries": []}
+    result = await runtime.context.provider.structured_output(
+        build_change_sql_messages(
+            state["compact_schema"],
+            current_dashboard,
+            state["modification_plan"],
+            affected_query_ids(state),
+            state.get("validation_errors", []),
+        ),
+        SQLGenerationResult,
+    )
+    return {
+        "generated_queries": result.queries,
+        "retry_count": state.get("retry_count", 0) + (1 if is_retry else 0),
+        "validation_errors": [],
+        "all_queries_valid": False,
+        "query_results": {},
+    }

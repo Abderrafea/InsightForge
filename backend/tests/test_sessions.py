@@ -50,6 +50,17 @@ async def test_delete_session(client: AsyncClient) -> None:
     assert get_response.status_code == 404
 
 
+async def test_rename_session(client: AsyncClient) -> None:
+    created = await create_session(client)
+
+    response = await client.patch(
+        f"/api/sessions/{created['id']}", json={"title": "Executive sales"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Executive sales"
+
+
 async def test_get_unknown_session(client: AsyncClient) -> None:
     response = await client.get(f"/api/sessions/{uuid4()}")
 

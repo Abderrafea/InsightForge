@@ -78,6 +78,8 @@ async def test_saved_credentials_are_encrypted_and_never_returned(
 
     assert "password" not in created
     assert "encrypted_password" not in created
+    assert "host" not in created
+    assert "username" not in created
     record = (
         await database_session.scalars(
             select(DatabaseConnection).where(DatabaseConnection.id == UUID(created["id"]))

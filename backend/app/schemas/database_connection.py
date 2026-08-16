@@ -63,5 +63,15 @@ class DatabaseConnectionRead(BaseModel):
     updated_at: datetime
 
 
+class DatabaseConnectionSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    database_type: Literal["postgresql"]
+    database_name: str
+    ssl_mode: SSLMode
+
+
 class ConnectionTestResult(BaseModel):
     success: Literal[True] = True

@@ -7,7 +7,7 @@ from app.core.exceptions import NotFoundError
 from app.models.session import Session
 from app.repositories.database_connection_repository import DatabaseConnectionRepository
 from app.repositories.session_repository import SessionRepository
-from app.schemas.session import SessionCreate
+from app.schemas.session import SessionCreate, SessionUpdate
 
 
 class SessionService:
@@ -42,6 +42,16 @@ class SessionService:
             raise NotFoundError("Session")
         await self._sessions.delete(session)
         await self._db.commit()
+
+    async def update(self, session_id: UUID, request: SessionUpdate) -> Session:
+        session = await self._sessions.get(session_id)
+        if session is None:
+            raise NotFoundError("Session")
+        session.title = request.title
+        session.updated_at = datetime.now(UTC)
+        await self._db.commit()
+        await self._db.refresh(session)
+        return session
 
     async def attach_database_connection(self, session_id: UUID, connection_id: UUID) -> Session:
         session = await self._sessions.get(session_id)

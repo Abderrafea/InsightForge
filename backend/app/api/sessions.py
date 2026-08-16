@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response, status
 
 from app.dependencies import get_session_service
-from app.schemas.session import SessionCreate, SessionDetails, SessionRead
+from app.schemas.session import SessionCreate, SessionDetails, SessionRead, SessionUpdate
 from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -25,6 +25,15 @@ async def list_sessions(service: SessionServiceDependency) -> list[SessionRead]:
 @router.get("/{session_id}", response_model=SessionDetails)
 async def get_session(session_id: UUID, service: SessionServiceDependency) -> SessionDetails:
     return SessionDetails.model_validate(await service.get_details(session_id))
+
+
+@router.patch("/{session_id}", response_model=SessionRead)
+async def update_session(
+    session_id: UUID,
+    request: SessionUpdate,
+    service: SessionServiceDependency,
+) -> SessionRead:
+    return SessionRead.model_validate(await service.update(session_id, request))
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -3,20 +3,27 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.graph import AgentWorkflow
+from app.agent.service import AgentService
 from app.config import Settings, get_settings
 from app.core.security import CredentialCipher
 from app.database.app_database import get_db_session
 from app.database.connection_manager import ExternalDatabaseConnectionManager
 from app.database.schema_inspector import PostgreSQLSchemaInspector
+from app.llm.base import LLMProvider
+from app.llm.factory import LLMFactory
 from app.query.executor import SafeQueryExecutor
 from app.query.policy import QueryPolicy
 from app.query.service import SafeQueryService
 from app.query.validator import SQLValidator
+from app.repositories.agent_run_repository import AgentRunRepository
+from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.database_connection_repository import DatabaseConnectionRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.query_execution_repository import QueryExecutionRepository
 from app.repositories.schema_cache_repository import SchemaCacheRepository
 from app.repositories.session_repository import SessionRepository
+from app.services.dashboard_service import DashboardService
 from app.services.database_connection_service import DatabaseConnectionService
 from app.services.message_service import MessageService
 from app.services.schema_inspection_service import SchemaInspectionService
@@ -111,4 +118,46 @@ def get_safe_query_service(
         schema_service,
         validator,
         executor,
+    )
+
+
+def get_dashboard_service(
+    db: DatabaseSession,
+    query_service: Annotated[SafeQueryService, Depends(get_safe_query_service)],
+) -> DashboardService:
+    return DashboardService(
+        SessionRepository(db),
+        DashboardRepository(db),
+        query_service,
+    )
+
+
+def get_llm_provider(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> LLMProvider:
+    return LLMFactory.create(settings)
+
+
+def get_agent_workflow(
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+    schema_service: Annotated[SchemaInspectionService, Depends(get_schema_inspection_service)],
+    query_service: Annotated[SafeQueryService, Depends(get_safe_query_service)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AgentWorkflow:
+    return AgentWorkflow(provider, schema_service, query_service, settings)
+
+
+def get_agent_service(
+    db: DatabaseSession,
+    workflow: Annotated[AgentWorkflow, Depends(get_agent_workflow)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AgentService:
+    return AgentService(
+        db,
+        SessionRepository(db),
+        MessageRepository(db),
+        DashboardRepository(db),
+        AgentRunRepository(db),
+        workflow,
+        settings.agent_max_context_messages,
     )

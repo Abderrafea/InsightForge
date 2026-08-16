@@ -10,7 +10,7 @@ from app.dependencies import (
 from app.schemas.database_connection import (
     ConnectionTestResult,
     DatabaseConnectionCreate,
-    DatabaseConnectionRead,
+    DatabaseConnectionSummary,
     DatabaseConnectionTest,
 )
 from app.schemas.schema_inspection import DatabaseSchemaMetadata
@@ -32,12 +32,12 @@ async def test_database_connection(
     return ConnectionTestResult()
 
 
-@router.post("", response_model=DatabaseConnectionRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=DatabaseConnectionSummary, status_code=status.HTTP_201_CREATED)
 async def create_database_connection(
     request: DatabaseConnectionCreate, service: ConnectionServiceDependency
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionSummary:
     connection = await service.create(request)
-    return DatabaseConnectionRead.model_validate(connection)
+    return DatabaseConnectionSummary.model_validate(connection)
 
 
 @router.get("/{connection_id}/schema", response_model=DatabaseSchemaMetadata)

@@ -4,11 +4,23 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.dashboard import DashboardRead
-from app.schemas.database_connection import DatabaseConnectionRead
+from app.schemas.database_connection import DatabaseConnectionSummary
 from app.schemas.message import MessageRead
 
 
 class SessionCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Session title must not be blank")
+        return cleaned
+
+
+class SessionUpdate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
 
     @field_validator("title")
@@ -35,5 +47,5 @@ class SessionRead(BaseModel):
 
 class SessionDetails(SessionRead):
     messages: list[MessageRead]
-    database_connection: DatabaseConnectionRead | None
+    database_connection: DatabaseConnectionSummary | None
     dashboard: DashboardRead | None

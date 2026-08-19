@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: insightforge
       POSTGRES_PASSWORD: insightforge_dev
     ports:
-      - "5433:5432"
+      - "5435:5432"
     volumes:
       - app_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -50,8 +50,19 @@ services:
       QUERY_MAX_SQL_LENGTH: 20000
       QUERY_MAX_JOINS: 8
       QUERY_MAX_RESULT_BYTES: 1000000
+      AI_PROVIDER: ${AI_PROVIDER:-groq}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_TEMPERATURE: ${AI_TEMPERATURE:-0}
+      AI_PROVIDER_TIMEOUT_SECONDS: ${AI_PROVIDER_TIMEOUT_SECONDS:-30}
+      AI_PROVIDER_MAX_RETRIES: ${AI_PROVIDER_MAX_RETRIES:-2}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      AGENT_MAX_SQL_RETRIES: ${AGENT_MAX_SQL_RETRIES:-3}
+      AGENT_MAX_CONTEXT_MESSAGES: ${AGENT_MAX_CONTEXT_MESSAGES:-20}
+      AGENT_MIN_WIDGETS: ${AGENT_MIN_WIDGETS:-2}
+      AGENT_MAX_WIDGETS: ${AGENT_MAX_WIDGETS:-8}
+      AGENT_RESULT_SAMPLE_ROWS: ${AGENT_RESULT_SAMPLE_ROWS:-5}
     ports:
-      - "8000:8000"
+      - "8001:8000"
     depends_on:
       app-db:
         condition: service_healthy
@@ -62,6 +73,16 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
 
   tests:
     profiles: ["test"]
@@ -78,6 +99,14 @@ services:
       QUERY_MAX_SQL_LENGTH: 20000
       QUERY_MAX_JOINS: 8
       QUERY_MAX_RESULT_BYTES: 1000000
+      AI_PROVIDER: groq
+      AI_MODEL: test-model
+      GROQ_API_KEY: test-key
+      AGENT_MAX_SQL_RETRIES: 3
+      AGENT_MAX_CONTEXT_MESSAGES: 20
+      AGENT_MIN_WIDGETS: 2
+      AGENT_MAX_WIDGETS: 8
+      AGENT_RESULT_SAMPLE_ROWS: 5
       RUN_POSTGRES_INTEGRATION_TESTS: "1"
       TEST_EXTERNAL_DB_HOST: demo-db
       TEST_EXTERNAL_DB_PORT: "5432"

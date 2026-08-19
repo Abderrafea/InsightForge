@@ -8,3 +8,5 @@
 *.db
 .env
 backend/.env
+**/node_modules
+frontend/dist

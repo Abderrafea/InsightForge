@@ -1,16 +1,19 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.graph import AgentWorkflow
 from app.agent.service import AgentService
 from app.config import Settings, get_settings
+from app.core.exceptions import BadRequestError
 from app.core.security import CredentialCipher
 from app.database.app_database import get_db_session
 from app.database.connection_manager import ExternalDatabaseConnectionManager
 from app.database.schema_inspector import PostgreSQLSchemaInspector
 from app.llm.base import LLMProvider
+from app.llm.exceptions import ProviderConfigurationError
 from app.llm.factory import LLMFactory
 from app.query.executor import SafeQueryExecutor
 from app.query.policy import QueryPolicy
@@ -40,7 +43,14 @@ def get_external_database_manager(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ExternalDatabaseConnectionManager:
     return ExternalDatabaseConnectionManager(
-        connect_timeout_seconds=settings.external_db_connect_timeout_seconds
+        connect_timeout_seconds=settings.external_db_connect_timeout_seconds,
+        allowed_targets=(settings.allowed_database_targets or None)
+        if settings.public_visitors
+        else settings.allowed_database_targets
+        if settings.production
+        else None,
+        require_tls=settings.production or settings.public_visitors,
+        public_only=settings.public_visitors,
     )
 
 
@@ -133,8 +143,37 @@ def get_dashboard_service(
 
 
 def get_llm_provider(
+    request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> LLMProvider:
+    if settings.public_visitors:
+        provider = request.headers.get("x-ai-provider", "groq").strip().casefold()
+        provider_info = next(
+            (item for item in settings.visitor_providers if item["id"] == provider), None
+        )
+        if provider_info is None:
+            raise BadRequestError(
+                "Select Groq, OpenAI or Anthropic", code="unsupported_ai_provider"
+            )
+        authorization = request.headers.get("authorization", "")
+        key = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+        model = request.headers.get("x-ai-model", "").strip()
+        if not key or len(key) > 512:
+            raise ProviderConfigurationError("Enter the selected provider's API key to continue")
+        if not model or (
+            not settings.visitor_allow_custom_models and model not in provider_info["models"]
+        ):
+            raise ProviderConfigurationError("Select an available AI model")
+        settings = settings.model_copy(
+            update={
+                "ai_provider": provider,
+                "ai_model": model,
+                # Explicitly clear every server key: a visitor must supply their own.
+                "groq_api_key": SecretStr(key) if provider == "groq" else None,
+                "openai_api_key": SecretStr(key) if provider == "openai" else None,
+                "anthropic_api_key": SecretStr(key) if provider == "anthropic" else None,
+            }
+        )
     return LLMFactory.create(settings)
 
 

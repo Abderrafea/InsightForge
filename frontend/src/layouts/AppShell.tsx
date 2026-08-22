@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { sessionApi } from "../api/sessions";
 import { AppSidebar } from "../components/AppSidebar";
+import { useVisitorControls } from "../components/AccessGate";
 import type { SessionDetails, SessionSummary } from "../types";
 
 export interface AppOutletContext {
@@ -14,6 +15,7 @@ export interface AppOutletContext {
 }
 
 export function AppShell() {
+  const visitor = useVisitorControls();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [activeSession, setActiveSession] = useState<SessionDetails | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -66,6 +68,8 @@ export function AppShell() {
         onCreate={createSession}
         onRename={renameSession}
         onDelete={deleteSession}
+        onEndSession={visitor?.endSession}
+        onChangeKey={visitor?.changeKey}
       />
       <main className="min-w-0">
         <Outlet

@@ -15,7 +15,7 @@ const initialInput: DatabaseConnectionInput = {
   database_name: "",
   username: "",
   password: "",
-  ssl_mode: "prefer",
+  ssl_mode: "verify-full",
 };
 
 export function ConnectionDialog({ onClose, onConnected }: ConnectionDialogProps) {

@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import { AppShell } from "./layouts/AppShell";
 import { HomePage } from "./pages/HomePage";
 import { SessionPage } from "./pages/SessionPage";
+import { AccessGate } from "./components/AccessGate";
 
 const DashboardPage = lazy(() =>
   import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })),
@@ -10,7 +11,7 @@ const DashboardPage = lazy(() =>
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <AccessGate><BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<HomePage />} />
@@ -25,6 +26,6 @@ export default function App() {
           />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </BrowserRouter></AccessGate>
   );
 }

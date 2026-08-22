@@ -13,6 +13,8 @@ interface AppSidebarProps {
   onCreate: () => Promise<void>;
   onRename: (sessionId: string, title: string) => Promise<void>;
   onDelete: (sessionId: string) => Promise<void>;
+  onEndSession?: () => Promise<void>;
+  onChangeKey?: () => void;
 }
 
 export function AppSidebar({
@@ -24,6 +26,8 @@ export function AppSidebar({
   onCreate,
   onRename,
   onDelete,
+  onEndSession,
+  onChangeKey,
 }: AppSidebarProps) {
   return (
     <>
@@ -87,6 +91,10 @@ export function AppSidebar({
             provider={activeSession?.ai_provider ?? null}
             model={activeSession?.ai_model ?? null}
           />
+          {onEndSession && <div className="flex flex-col items-start gap-2 text-xs text-steel">
+            <button onClick={onChangeKey} className="hover:text-ink">Change API key</button>
+            <button onClick={() => void onEndSession()} className="text-red-800">Erase my private session</button>
+          </div>}
         </div>
       </aside>
     </>

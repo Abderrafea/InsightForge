@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: insightforge
       POSTGRES_PASSWORD: insightforge_dev
     ports:
-      - "5435:5432"
+      - "127.0.0.1:5435:5432"
     volumes:
       - app_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,7 +24,7 @@ services:
       POSTGRES_USER: demo_admin
       POSTGRES_PASSWORD: demo_admin_dev
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - demo_db_data:/var/lib/postgresql/data
       - ./demo-db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
@@ -42,6 +42,7 @@ services:
       target: runtime
     environment:
       APP_ENV: development
+      ACCESS_MODE: ${ACCESS_MODE:-public}
       APP_DATABASE_URL: postgresql+psycopg://insightforge:insightforge_dev@app-db:5432/insightforge
       SECRET_ENCRYPTION_KEY: 7B1wI_gfTi94x_6crw4VBbg4FPVkudmkx5zeO0oBHho=
       EXTERNAL_DB_CONNECT_TIMEOUT_SECONDS: 5
@@ -56,13 +57,19 @@ services:
       AI_PROVIDER_TIMEOUT_SECONDS: ${AI_PROVIDER_TIMEOUT_SECONDS:-30}
       AI_PROVIDER_MAX_RETRIES: ${AI_PROVIDER_MAX_RETRIES:-2}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VISITOR_ALLOW_CUSTOM_MODELS: ${VISITOR_ALLOW_CUSTOM_MODELS:-true}
+      VISITOR_MODELS: ${VISITOR_MODELS:-openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b}
+      VISITOR_OPENAI_MODELS: ${VISITOR_OPENAI_MODELS:-gpt-6-luna,gpt-6.1-sol,gpt-6-astra}
+      VISITOR_ANTHROPIC_MODELS: ${VISITOR_ANTHROPIC_MODELS:-claude-sonnet-5-5,claude-haiku-5-5}
       AGENT_MAX_SQL_RETRIES: ${AGENT_MAX_SQL_RETRIES:-3}
       AGENT_MAX_CONTEXT_MESSAGES: ${AGENT_MAX_CONTEXT_MESSAGES:-20}
       AGENT_MIN_WIDGETS: ${AGENT_MIN_WIDGETS:-2}
       AGENT_MAX_WIDGETS: ${AGENT_MAX_WIDGETS:-8}
       AGENT_RESULT_SAMPLE_ROWS: ${AGENT_RESULT_SAMPLE_ROWS:-5}
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     depends_on:
       app-db:
         condition: service_healthy
@@ -79,7 +86,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
-      - "5173:80"
+      - "127.0.0.1:5173:80"
     depends_on:
       api:
         condition: service_healthy

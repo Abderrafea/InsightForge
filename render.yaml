@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: insightforge
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./deploy/render.Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: ACCESS_MODE
+        value: public
+      - key: DEPLOYMENT_MODE
+        value: render
+      - key: APP_DATABASE_URL
+        sync: false
+      - key: SECRET_ENCRYPTION_KEY
+        generateValue: true
+      - key: MAX_CONCURRENT_REQUESTS
+        value: "2"
+      - key: APP_DB_POOL_SIZE
+        value: "3"
+      - key: AGENT_RESULT_SAMPLE_ROWS
+        value: "0"
+      - key: VISITOR_ALLOW_CUSTOM_MODELS
+        value: "true"

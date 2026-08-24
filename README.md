@@ -1,5 +1,13 @@
 # InsightForge
 
+The [public demo mode](deploy/PUBLIC_DEMO.md) lets each visitor use their own Groq, OpenAI or Anthropic
+key and an isolated PostgreSQL workspace. API keys stay in page memory.
+
+For free hosting on Render and Neon, see [the Render deployment guide](deploy/RENDER.md).
+
+For a password-protected, single-owner HTTPS deployment, see [the production guide](deploy/README.md).
+The development Compose file is for local use; use `compose.production.yml` for production.
+
 InsightForge is a provider-agnostic AI dashboard application. It connects to a customer's PostgreSQL database, understands its schema, and builds or edits dashboards from natural-language requests.
 
 This repository currently contains **Phase 1 through Phase 4**. It includes a provider-agnostic
@@ -35,7 +43,7 @@ Phase 2 adds the deterministic safe analytical query engine:
 Phase 3 adds the AI orchestration layer:
 
 - One typed LangGraph workflow for intent, schema inspection, planning, SQL, execution, and build
-- Provider-neutral `LLMProvider` strategy with a factory-selected Groq adapter
+- Provider-neutral `LLMProvider` strategy with Groq, OpenAI and Anthropic adapters
 - Pydantic structured outputs for intent, dashboard plans, generated SQL, and dashboard config
 - Visible conditional SQL repair edges with a bounded retry budget
 - Deterministic reuse of `SchemaInspectionService` and `SafeQueryService`
@@ -149,7 +157,7 @@ The provider design applies four explicit patterns:
 
 - **Strategy:** `LLMProvider` defines interchangeable model behavior.
 - **Factory:** `LLMFactory` selects the configured provider.
-- **Adapter:** `GroqProvider` normalizes `ChatGroq` behind the internal protocol.
+- **Adapters:** `GroqProvider`, `OpenAIProvider` and `AnthropicProvider` normalize provider clients behind the internal protocol.
 - **Dependency inversion:** graph nodes depend only on `LLMProvider`, never on `ChatGroq`.
 
 Each graph invocation sets `thread_id = session_id`. The App Database remains the durable product
@@ -499,7 +507,7 @@ RUN_GROQ_INTEGRATION_TESTS=1 pytest -q tests/integration/test_groq_provider.py
 - Query history stores SQL and sanitized metadata, never result datasets or credentials.
 - Agent state contains IDs, schema metadata, plans, SQL, bounded result samples, and dashboard
   configuration, but never database passwords, encrypted passwords, or secret-bearing URLs.
-- Provider keys stay inside application configuration and the Groq adapter.
+- Visitor keys remain in page memory and are sent only to the selected provider adapter for agent requests. Owner keys stay in server configuration.
 - Every AI-generated query is revalidated and executed by Phase 2's `SafeQueryService`.
 - Generated dashboards must pass Pydantic structure, reference, and result-field validation before
   storage.
@@ -517,7 +525,7 @@ Metadata inspection remains separate from analytical query execution and uses Po
 - Result byte limiting is a practical serialized-response approximation. A bounded cursor batch may briefly hold more data than the final response limit.
 - Query parameters are supported by the private executor boundary but are not exposed through the Phase 2 API.
 - Query history is session-scoped in the public API; direct connection executions are persisted with a null session for future audit tooling.
-- Groq is the only implemented provider adapter; other factory values fail explicitly.
+- Groq, OpenAI and Anthropic are implemented. Other provider names fail explicitly.
 - Provider calls are request/response based; streaming, cancellation, background runs, and durable
   LangGraph checkpoints are not included.
 - The dashboard builder sees column metadata and a configurable small sample of already bounded
@@ -530,6 +538,6 @@ Metadata inspection remains separate from analytical query execution and uses Po
 ## Deferred To Phase 5
 
 Potential Phase 5 work includes response streaming, cancellation, version history/rollback UI,
-additional provider adapters, richer dashboard interaction, and production authentication. RAG,
+additional provider adapters, richer dashboard interaction, and multi-user authentication. RAG,
 embeddings, multi-agent orchestration, billing, scheduling, and unrelated enterprise infrastructure
 remain intentionally out of scope unless a future phase explicitly calls for them.

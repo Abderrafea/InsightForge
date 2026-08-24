@@ -1,0 +1,26 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+    log {
+        output stdout
+        format json
+    }
+    basic_auth {
+        {$ADMIN_USERNAME} {$ADMIN_PASSWORD_HASH}
+    }
+    header {
+        -Server
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        Cache-Control no-store
+    }
+    reverse_proxy web:80 {
+        header_up -Authorization
+        header_up X-InsightForge-Proxy-Token {$ACCESS_PROXY_TOKEN}
+    }
+}

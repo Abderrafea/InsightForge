@@ -1,0 +1,11 @@
+services:
+  api:
+    environment:
+      ACCESS_MODE: public
+      GROQ_API_KEY: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      AI_MODEL: ""
+  proxy:
+    volumes:
+      - ./deploy/Caddyfile.public:/etc/caddy/Caddyfile:ro

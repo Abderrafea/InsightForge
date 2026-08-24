@@ -1,0 +1,115 @@
+# Standalone production stack. Do not merge with docker-compose.yml.
+name: insightforge-production
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  app-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: insightforge
+      POSTGRES_USER: insightforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate .env.production first}
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U insightforge -d insightforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      ACCESS_MODE: ${ACCESS_MODE:-owner}
+      APP_DATABASE_URL: postgresql+psycopg://insightforge:${POSTGRES_PASSWORD:?Required}@app-db:5432/insightforge
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?Required}
+      PUBLIC_ORIGIN: https://${DOMAIN:?Required}
+      ACCESS_PROXY_TOKEN: ${ACCESS_PROXY_TOKEN:?Required}
+      EXTERNAL_DB_ALLOWED_TARGETS: ${EXTERNAL_DB_ALLOWED_TARGETS:-}
+      AI_PROVIDER: ${AI_PROVIDER:-groq}
+      AI_MODEL: ${AI_MODEL:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VISITOR_ALLOW_CUSTOM_MODELS: ${VISITOR_ALLOW_CUSTOM_MODELS:-true}
+      VISITOR_MODELS: ${VISITOR_MODELS:-openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b}
+      VISITOR_OPENAI_MODELS: ${VISITOR_OPENAI_MODELS:-gpt-6-luna,gpt-6.1-sol,gpt-6-astra}
+      VISITOR_ANTHROPIC_MODELS: ${VISITOR_ANTHROPIC_MODELS:-claude-sonnet-5-5,claude-haiku-5-5}
+      AI_PROVIDER_TIMEOUT_SECONDS: 30
+      QUERY_TIMEOUT_SECONDS: 10
+      QUERY_MAX_ROWS: 1000
+      AGENT_RESULT_SAMPLE_ROWS: 0
+      MAX_CONCURRENT_REQUESTS: 4
+    networks: [database, application, outbound]
+    depends_on:
+      app-db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    networks: [application]
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Required}
+      ACME_EMAIL: ${ACME_EMAIL:?Required}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-owner}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
+      ACCESS_PROXY_TOKEN: ${ACCESS_PROXY_TOKEN:?Required}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [application, outbound]
+    depends_on:
+      web:
+        condition: service_healthy
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+
+networks:
+  database:
+    internal: true
+  application:
+    internal: true
+  outbound:
+
+volumes:
+  app_db_data:
+  caddy_data:
+  caddy_config:

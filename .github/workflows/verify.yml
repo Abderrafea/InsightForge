@@ -16,7 +16,7 @@ jobs:
       - name: Run backend tests against PostgreSQL
         run: docker compose --profile test run --build --rm tests
       - name: Check Python code
-        run: docker compose --profile test run --rm tests ruff check app tests
+        run: docker compose --profile test run --rm tests ruff check --no-cache app tests
       - name: Stop test containers
         if: always()
         run: docker compose --profile test down --volumes

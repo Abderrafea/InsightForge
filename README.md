@@ -4,6 +4,7 @@ The [public demo mode](deploy/PUBLIC_DEMO.md) lets each visitor use their own Gr
 key and an isolated PostgreSQL workspace. API keys stay in page memory.
 
 For free hosting on Render and Neon, see [the Render deployment guide](deploy/RENDER.md).
+For a hosting plan that does not require a card, see [FastAPI Cloud Hobby](deploy/FASTAPI_CLOUD.md).
 
 For a password-protected, single-owner HTTPS deployment, see [the production guide](deploy/README.md).
 The development Compose file is for local use; use `compose.production.yml` for production.

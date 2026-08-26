@@ -10,6 +10,7 @@ readme = {text = "InsightForge backend service.", content-type = "text/markdown"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.14,<2",
+  "certifi>=2026.10.23",
   "cryptography>=50.0.2,<51",
   "fastapi>=0.115,<1",
   "langchain-core>=1.0,<2",
@@ -25,6 +26,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+deploy = ["fastapi[standard]>=0.115,<1"]
+
 ops = ["bcrypt>=4,<6"]
 dev = [
   "aiosqlite>=0.20,<1",
@@ -37,6 +40,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
+
+[tool.fastapi]
+entrypoint = "app.cloud:app"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

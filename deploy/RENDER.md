@@ -16,7 +16,7 @@ The image supplies `APP_ENV=production`, `ACCESS_MODE=public` and
 `DEPLOYMENT_MODE=render`. Render supplies `PORT` and `RENDER_EXTERNAL_URL`; startup
 uses the latter as the public origin. A custom domain requires `PUBLIC_ORIGIN` to
 be updated to its HTTPS origin. PostgreSQL connections enforce `verify-full` TLS
-with system certificate roots. Startup applies Alembic migrations before listening.
+with the maintained certifi CA bundle. Startup applies Alembic migrations before listening.
 Run one instance and one worker; this avoids concurrent startup migrations.
 
 The database pool has three connections and no overflow. Requests are limited to

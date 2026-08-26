@@ -32,7 +32,7 @@ async def cleanup_loop(interval: int) -> None:
 async def lifespan(app: FastAPI):
     settings = get_settings()
     task = None
-    if settings.deployment_mode == "render" and settings.public_visitors:
+    if settings.deployment_mode in {"render", "direct"} and settings.public_visitors:
         await cleanup()
         task = asyncio.create_task(cleanup_loop(settings.visitor_cleanup_interval_seconds))
     try:

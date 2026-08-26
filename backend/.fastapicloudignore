@@ -1,0 +1,7 @@
+# This directory is the deployment root. Ship only runtime code and built UI.
+*
+!app/
+!app/**
+!pyproject.toml
+!dist/
+!dist/**

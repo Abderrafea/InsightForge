@@ -3,6 +3,7 @@ import subprocess
 from types import SimpleNamespace
 from uuid import uuid4
 
+import certifi
 import pytest
 from cryptography.fernet import Fernet
 from fastapi import FastAPI
@@ -40,7 +41,7 @@ def test_render_start_normalizes_neon_url_and_preserves_password():
     assert url.drivername == "postgresql+psycopg"
     assert url.password == "encoded@password"
     assert url.query["sslmode"] == "verify-full"
-    assert url.query["sslrootcert"] == "system"
+    assert url.query["sslrootcert"] == certifi.where()
     assert url.query["channel_binding"] == "require"
     assert env["PUBLIC_ORIGIN"] == "https://test.onrender.com"
     assert env["ACCESS_MODE"] == "public"

@@ -78,7 +78,10 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 @app.exception_handler(Exception)
 async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("Unhandled application error")
+    if get_settings().production:
+        logger.error("Unhandled application error (%s)", type(exc).__name__)
+    else:
+        logger.exception("Unhandled application error")
     return JSONResponse(
         status_code=500,
         content={

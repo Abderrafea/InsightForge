@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     max_request_bytes: int = Field(default=65_536, ge=1_024, le=1_000_000)
     max_concurrent_requests: int = Field(default=8, ge=1, le=64)
     access_mode: Literal["owner", "public"] = "owner"
-    deployment_mode: Literal["gateway", "render"] = "gateway"
+    deployment_mode: Literal["gateway", "render", "direct"] = "gateway"
     frontend_dist_dir: str | None = None
     visitor_cleanup_interval_seconds: int = Field(default=3600, ge=60, le=86400)
     app_db_pool_size: int = Field(default=3, ge=1, le=10)
@@ -124,8 +124,8 @@ class Settings(BaseSettings):
             token = self.access_proxy_token.get_secret_value() if self.access_proxy_token else ""
             if self.deployment_mode == "gateway" and len(token) < 32:
                 raise ValueError("ACCESS_PROXY_TOKEN must contain at least 32 characters")
-            if self.deployment_mode == "render" and not self.public_visitors:
-                raise ValueError("Render deployment requires isolated public visitor mode")
+            if self.deployment_mode in {"render", "direct"} and not self.public_visitors:
+                raise ValueError("Direct deployment requires isolated public visitor mode")
             key = self.secret_encryption_key.get_secret_value()
             if key == "7B1wI_gfTi94x_6crw4VBbg4FPVkudmkx5zeO0oBHho=":
                 raise ValueError("Production requires a unique SECRET_ENCRYPTION_KEY")

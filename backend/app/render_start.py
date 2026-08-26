@@ -3,18 +3,22 @@
 import os
 import subprocess
 from collections.abc import MutableMapping
+from typing import Literal
 
+import certifi
 from sqlalchemy.engine import make_url
 
 
-def configure_environment(env: MutableMapping[str, str]) -> int:
+def configure_environment(
+    env: MutableMapping[str, str], *, deployment_mode: Literal["render", "direct"] = "render"
+) -> int:
     for key, value in {
         "APP_ENV": "production",
         "ACCESS_MODE": "public",
-        "DEPLOYMENT_MODE": "render",
+        "DEPLOYMENT_MODE": deployment_mode,
     }.items():
         if env.get(key, value) != value:
-            raise ValueError(f"{key} is not valid for the Render image")
+            raise ValueError(f"{key} is not valid for this public deployment")
         env[key] = value
     origin = env.get("PUBLIC_ORIGIN") or env.get("RENDER_EXTERNAL_URL")
     if not origin:
@@ -28,7 +32,7 @@ def configure_environment(env: MutableMapping[str, str]) -> int:
         if url.drivername not in {"postgresql", "postgresql+psycopg"} or not url.host:
             raise ValueError("Unsupported database URL")
         url = url.set(drivername="postgresql+psycopg").update_query_dict(
-            {"sslmode": "verify-full", "sslrootcert": url.query.get("sslrootcert", "system")}
+            {"sslmode": "verify-full", "sslrootcert": url.query.get("sslrootcert", certifi.where())}
         )
         env["APP_DATABASE_URL"] = url.render_as_string(hide_password=False)
     except Exception as exc:

@@ -7,7 +7,7 @@ availability guarantee. Check current plan terms before using valuable data.
 
 ## Prepare a release
 
-Install the official CLI with `python -m pip install -e "backend[deploy]"` and
+Install the application and official CLI with `python -m pip install -e backend` and
 sign in using `fastapi cloud login`. The browser lets the account owner review
 GitHub login and authorize the CLI. Run `npm ci` from `frontend` on a fresh
 checkout, then run this from the repository root:
@@ -22,6 +22,8 @@ project metadata and the generated `dist/` UI. Local environment files, credenti
 tests, caches, migrations and unrelated workspace files are excluded. The generated
 UI remains ignored by Git, but is included in the cloud upload. The source GitHub
 integration alone does not build this frontend; use a local release or a CI build.
+The uploaded `.python-version` fixes the runtime to Python 3.12. The main dependencies
+include `fastapi[standard]` because the platform starts the server with the FastAPI CLI.
 
 ## Configure the application
 

@@ -3,5 +3,6 @@
 !app/
 !app/**
 !pyproject.toml
+!.python-version
 !dist/
 !dist/**

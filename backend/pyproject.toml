@@ -7,12 +7,12 @@ name = "insightforge-backend"
 version = "0.1.0"
 description = "Backend foundation for an AI-powered dynamic dashboard system"
 readme = {text = "InsightForge backend service.", content-type = "text/markdown"}
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = [
   "alembic>=1.14,<2",
   "certifi>=2026.10.23",
   "cryptography>=50.0.2,<51",
-  "fastapi>=0.115,<1",
+  "fastapi[standard]>=0.115,<1",
   "langchain-core>=1.0,<2",
   "langchain-groq>=1.0,<2",
   "langchain-openai>=1.7.4,<2",
@@ -26,8 +26,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-deploy = ["fastapi[standard]>=0.115,<1"]
-
 ops = ["bcrypt>=4,<6"]
 dev = [
   "aiosqlite>=0.20,<1",

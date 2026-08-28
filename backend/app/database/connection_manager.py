@@ -4,6 +4,7 @@ import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import certifi
 import psycopg
 from psycopg import AsyncConnection
 
@@ -36,6 +37,8 @@ class ExternalDatabaseConnectionManager:
                 "Production database connections require verify-full TLS"
             )
         connection_options = {}
+        if credentials.ssl_mode in {"verify-full", "verify-ca"}:
+            connection_options["sslrootcert"] = certifi.where()
         if self._public_only:
             if credentials.port not in {5432, 6543} or any(
                 character in credentials.host for character in ",/\\ \t\r\n"

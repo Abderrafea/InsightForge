@@ -3,6 +3,7 @@ import socket
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import certifi
 import pytest
 from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
@@ -226,3 +227,4 @@ async def test_public_database_pins_the_checked_address(monkeypatch):
     assert connect.call_args.kwargs["hostaddr"] == "8.8.8.8"
     assert connect.call_args.kwargs["host"] == "database.example.com"
     assert connect.call_args.kwargs["sslmode"] == "verify-full"
+    assert connect.call_args.kwargs["sslrootcert"] == certifi.where()

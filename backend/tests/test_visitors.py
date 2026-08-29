@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import certifi
+import psycopg
 import pytest
 from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
@@ -228,3 +229,41 @@ async def test_public_database_pins_the_checked_address(monkeypatch):
     assert connect.call_args.kwargs["host"] == "database.example.com"
     assert connect.call_args.kwargs["sslmode"] == "verify-full"
     assert connect.call_args.kwargs["sslrootcert"] == certifi.where()
+
+
+async def test_public_database_tries_an_alternate_checked_address_family(monkeypatch):
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(
+        loop,
+        "getaddrinfo",
+        AsyncMock(
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 5432)),
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.4.4", 5432)),
+                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:4860:4860::8888", 5432)),
+            ]
+        ),
+    )
+    connection = AsyncMock()
+    connection.closed = False
+    connect = AsyncMock(
+        side_effect=[psycopg.OperationalError("network is unreachable"), connection]
+    )
+    monkeypatch.setattr("app.database.connection_manager.AsyncConnection.connect", connect)
+    manager = ExternalDatabaseConnectionManager(public_only=True, require_tls=True)
+    credentials = ExternalDatabaseCredentials(
+        host="database.example.com",
+        port=5432,
+        database_name="db",
+        username="reader",
+        password="secret",
+        ssl_mode="verify-full",
+    )
+    async with manager.connection(credentials):
+        pass
+    assert [call.kwargs["hostaddr"] for call in connect.call_args_list] == [
+        "8.8.8.8",
+        "2001:4860:4860::8888",
+    ]
+    assert all(call.kwargs["host"] == credentials.host for call in connect.call_args_list)
+    assert all(call.kwargs["sslmode"] == "verify-full" for call in connect.call_args_list)

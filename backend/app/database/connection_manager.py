@@ -1,5 +1,6 @@
 import asyncio
 import ipaddress
+import logging
 import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -10,6 +11,8 @@ from psycopg import AsyncConnection
 
 from app.core.exceptions import ExternalDatabaseConnectionError
 from app.database.external_database import ExternalDatabaseCredentials
+
+logger = logging.getLogger(__name__)
 
 
 class ExternalDatabaseConnectionManager:
@@ -37,6 +40,7 @@ class ExternalDatabaseConnectionManager:
                 "Production database connections require verify-full TLS"
             )
         connection_options = {}
+        checked_addresses: list[str | None] = [None]
         if credentials.ssl_mode in {"verify-full", "verify-ca"}:
             connection_options["sslrootcert"] = certifi.where()
         if self._public_only:
@@ -53,7 +57,9 @@ class ExternalDatabaseConnectionManager:
                     ),
                     timeout=self._connect_timeout_seconds,
                 )
-                ips = {ipaddress.ip_address(address[4][0]) for address in addresses}
+                ips = list(
+                    dict.fromkeys(ipaddress.ip_address(address[4][0]) for address in addresses)
+                )
             except (OSError, ValueError, TimeoutError) as exc:
                 raise ExternalDatabaseConnectionError(
                     "The database hostname could not be resolved"
@@ -64,20 +70,37 @@ class ExternalDatabaseConnectionManager:
                 for ip in ips
             ):
                 raise ExternalDatabaseConnectionError("Only public database addresses are allowed")
-            # Preserve the hostname for TLS verification while pinning the checked address.
-            connection_options["hostaddr"] = str(sorted(ips, key=str)[0])
+            # Keep resolver preference, and try the other address family before
+            # additional addresses. IPv6-only hosting may require a DNS64 address.
+            preferred = [ips[0]]
+            alternate = next((ip for ip in ips if ip.version != ips[0].version), None)
+            if alternate is not None:
+                preferred.append(alternate)
+            preferred.extend(ip for ip in ips if ip not in preferred)
+            checked_addresses = [str(ip) for ip in preferred[:4]]
         try:
-            connection = await AsyncConnection.connect(
-                host=credentials.host,
-                port=credentials.port,
-                dbname=credentials.database_name,
-                user=credentials.username,
-                password=credentials.password,
-                sslmode=credentials.ssl_mode,
-                connect_timeout=self._connect_timeout_seconds,
-                autocommit=True,
-                **connection_options,
-            )
+            for index, address in enumerate(checked_addresses):
+                options = {**connection_options}
+                if address is not None:
+                    options["hostaddr"] = address
+                try:
+                    connection = await AsyncConnection.connect(
+                        host=credentials.host,
+                        port=credentials.port,
+                        dbname=credentials.database_name,
+                        user=credentials.username,
+                        password=credentials.password,
+                        sslmode=credentials.ssl_mode,
+                        connect_timeout=self._connect_timeout_seconds,
+                        autocommit=True,
+                        **options,
+                    )
+                    break
+                except (psycopg.errors.InvalidPassword, psycopg.errors.InvalidCatalogName):
+                    raise
+                except (psycopg.OperationalError, OSError, TimeoutError):
+                    if index == len(checked_addresses) - 1:
+                        raise
         except psycopg.errors.InvalidPassword as exc:
             raise ExternalDatabaseConnectionError(
                 "Authentication failed. Check the database username and password."
@@ -87,6 +110,25 @@ class ExternalDatabaseConnectionManager:
                 "The requested database does not exist or is not accessible."
             ) from exc
         except (psycopg.OperationalError, OSError, TimeoutError) as exc:
+            message = str(exc).lower()
+            reason = next(
+                (
+                    label
+                    for fragment, label in [
+                        ("certificate verify failed", "tls_certificate"),
+                        ("root certificate", "tls_ca_file"),
+                        ("network is unreachable", "network_unreachable"),
+                        ("connection refused", "connection_refused"),
+                        ("timeout", "timeout"),
+                        ("timed out", "timeout"),
+                        ("channel binding", "channel_binding"),
+                        ("endpoint", "endpoint_routing"),
+                    ]
+                    if fragment in message
+                ),
+                "transport",
+            )
+            logger.warning("External database connection failed (%s)", reason)
             raise ExternalDatabaseConnectionError(
                 "The database could not be reached. Check the host, port, SSL mode, "
                 "and network access."

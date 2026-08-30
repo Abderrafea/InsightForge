@@ -13,6 +13,24 @@ from app.core.exceptions import ExternalDatabaseConnectionError
 from app.database.external_database import ExternalDatabaseCredentials
 
 logger = logging.getLogger(__name__)
+_NAT64_PUBLIC_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
+_NAT64_LOCAL_PREFIX = ipaddress.IPv6Network("64:ff9b:1::/48")
+
+
+def _is_public_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if not address.is_global:
+        return False
+    if isinstance(address, ipaddress.IPv6Address):
+        if address in _NAT64_LOCAL_PREFIX:
+            return False
+        embedded = address.ipv4_mapped or address.sixtofour
+        if address in _NAT64_PUBLIC_PREFIX:
+            embedded = ipaddress.IPv4Address(address.packed[-4:])
+        if embedded is not None and not embedded.is_global:
+            return False
+        if address.teredo is not None and not all(ip.is_global for ip in address.teredo):
+            return False
+    return True
 
 
 class ExternalDatabaseConnectionManager:
@@ -64,11 +82,7 @@ class ExternalDatabaseConnectionManager:
                 raise ExternalDatabaseConnectionError(
                     "The database hostname could not be resolved"
                 ) from exc
-            if not ips or any(
-                not ip.is_global
-                or (getattr(ip, "ipv4_mapped", None) is not None and not ip.ipv4_mapped.is_global)
-                for ip in ips
-            ):
+            if not ips or any(not _is_public_address(ip) for ip in ips):
                 raise ExternalDatabaseConnectionError("Only public database addresses are allowed")
             # Keep resolver preference, and try the other address family before
             # additional addresses. IPv6-only hosting may require a DNS64 address.

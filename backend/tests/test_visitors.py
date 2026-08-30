@@ -175,7 +175,17 @@ def test_public_provider_uses_request_key_and_never_server_key(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "ips", [["127.0.0.1"], ["169.254.169.254"], ["10.0.0.1"], ["8.8.8.8", "127.0.0.1"]]
+    "ips",
+    [
+        ["127.0.0.1"],
+        ["169.254.169.254"],
+        ["10.0.0.1"],
+        ["8.8.8.8", "127.0.0.1"],
+        ["64:ff9b::7f00:1"],
+        ["64:ff9b::a00:1"],
+        ["64:ff9b:1::808:808"],
+        ["2002:7f00:1::"],
+    ],
 )
 async def test_public_databases_reject_private_and_mixed_dns(ips, monkeypatch):
     loop = asyncio.get_running_loop()
@@ -240,7 +250,7 @@ async def test_public_database_tries_an_alternate_checked_address_family(monkeyp
             return_value=[
                 (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 5432)),
                 (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.4.4", 5432)),
-                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:4860:4860::8888", 5432)),
+                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("64:ff9b::808:808", 5432)),
             ]
         ),
     )
@@ -263,7 +273,7 @@ async def test_public_database_tries_an_alternate_checked_address_family(monkeyp
         pass
     assert [call.kwargs["hostaddr"] for call in connect.call_args_list] == [
         "8.8.8.8",
-        "2001:4860:4860::8888",
+        "64:ff9b::808:808",
     ]
     assert all(call.kwargs["host"] == credentials.host for call in connect.call_args_list)
     assert all(call.kwargs["sslmode"] == "verify-full" for call in connect.call_args_list)

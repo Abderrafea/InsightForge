@@ -1,544 +1,218 @@
 # InsightForge
 
-The [public demo mode](deploy/PUBLIC_DEMO.md) lets each visitor use their own Groq, OpenAI or Anthropic
-key and an isolated PostgreSQL workspace. API keys stay in page memory.
+**Turn PostgreSQL data into interactive dashboards through conversation.**
 
-For free hosting on Render and Neon, see [the Render deployment guide](deploy/RENDER.md).
-For a hosting plan that does not require a card, see [FastAPI Cloud Hobby](deploy/FASTAPI_CLOUD.md).
+[![Verify](https://github.com/Abderrafea/InsightForge/actions/workflows/verify.yml/badge.svg)](https://github.com/Abderrafea/InsightForge/actions/workflows/verify.yml)
 
-For a password-protected, single-owner HTTPS deployment, see [the production guide](deploy/README.md).
-The development Compose file is for local use; use `compose.production.yml` for production.
+[Try the live application](https://insightforge.fastapicloud.dev/) · [Deployment guide](deploy/FASTAPI_CLOUD.md) · [AI providers and models](deploy/AI_PROVIDERS.md)
 
-InsightForge is a provider-agnostic AI dashboard application. It connects to a customer's PostgreSQL database, understands its schema, and builds or edits dashboards from natural-language requests.
+InsightForge connects to a PostgreSQL database, discovers its schema, and uses an AI model to build a dashboard from your request. Continue the conversation to change charts, add metrics, or adjust the analysis. Every generated query passes through a read-only SQL validation and execution layer.
 
-This repository currently contains **Phase 1 through Phase 4**. It includes a provider-agnostic
-LangGraph agent, a safe read-only query engine, immutable dashboard versions, and a responsive
-React session/chat interface.
+Bring your own **Groq, OpenAI, or Anthropic API key**. Choose a suggested model or enter a compatible model ID available to your account.
 
-## Current Capabilities
+## What you can do
 
-Phase 1 provides the database and session foundation:
+- **Create dashboards from natural language.** Ask for revenue trends, regional comparisons, top products, or other metrics supported by your database.
+- **Refine an existing dashboard.** Change chart types, add or remove widgets, update filters, and request a different grouping. UI-only edits preserve existing queries; data changes regenerate the affected queries.
+- **Explore PostgreSQL schemas.** Discover tables, columns, primary keys, and foreign keys, with cached metadata and explicit refresh.
+- **View KPIs, charts, and tables.** The React interface renders validated dashboard configurations and refreshes their query data.
+- **Keep conversations organized.** Create, rename, select, and delete analysis sessions, each with its own chat history and database connection.
+- **Use isolated visitor workspaces.** Each browser session has its own saved connections, conversations, and dashboards, with an option to erase them.
+- **Switch AI providers through one interface.** Groq, OpenAI, and Anthropic adapters implement the same provider protocol and structured-output contracts.
 
-- Persistent dashboard/chat sessions and chronological messages
-- Encrypted external PostgreSQL credentials
-- Connection validation with sanitized failures and timeouts
-- PostgreSQL schema discovery for tables, columns, primary keys, and foreign keys
-- Cached schema metadata with force refresh support
-- Dashboard persistence and typed future dashboard configuration models
-- Async FastAPI, SQLAlchemy 2, psycopg 3, Alembic, and PostgreSQL
-- A Dockerized ecommerce database with a dedicated read-only user
-- Unit/API tests plus real PostgreSQL integration tests
+For example:
 
-Phase 2 adds the deterministic safe analytical query engine:
+> Build a sales dashboard with total revenue, monthly revenue, and the five best-selling products.
+>
+> Change the monthly revenue chart to weekly and keep the other widgets.
+>
+> Turn the product chart into a horizontal bar chart.
 
-- PostgreSQL AST parsing with SQLGlot
-- One-statement, `SELECT`-only enforcement with CTE support
-- Schema-aware table validation and conservative qualified-column validation
-- System-schema, dangerous-function, SQL-length, and join-count policies
-- Read-only PostgreSQL transactions and database-side statement timeouts
-- Server-side cursor streaming with row and serialized-payload limits
-- JSON-safe conversion for timestamps, dates, decimals, UUIDs, binary data, and arrays
-- Sanitized typed query errors and metadata-only query history
-- Direct connection and session-context query endpoints
+The available analyses depend on the tables and columns in the connected database.
 
-Phase 3 adds the AI orchestration layer:
+## How it works
 
-- One typed LangGraph workflow for intent, schema inspection, planning, SQL, execution, and build
-- Provider-neutral `LLMProvider` strategy with Groq, OpenAI and Anthropic adapters
-- Pydantic structured outputs for intent, dashboard plans, generated SQL, and dashboard config
-- Visible conditional SQL repair edges with a bounded retry budget
-- Deterministic reuse of `SchemaInspectionService` and `SafeQueryService`
-- Dashboard referential/field validation before one-per-session persistence
-- Durable user/assistant messages and metadata-only `AgentRun` audit records
-- Offline mocked-provider tests; real Groq access is optional
+1. Select an AI provider and model, enter your key, and review the data-sharing consent.
+2. Connect a PostgreSQL database using a dedicated read-only account.
+3. Create a session and describe the dashboard you want.
+4. InsightForge inspects the schema, plans the widgets, generates SQL, validates it, and executes bounded read queries.
+5. Review the dashboard and request changes in the chat. Successful changes create immutable dashboard versions.
 
-Phase 4 adds conversational editing and the product UI:
+The live application uses FastAPI Cloud for the application and Neon for its application database. Your analysis database is a separate connection that you provide.
 
-- Small typed dashboard patches instead of full regeneration for every edit
-- `UI_ONLY`, `DATA_QUERY_REQUIRED`, and `MIXED` change classification
-- Partial SQL generation, validation, and execution for affected queries only
-- Clarification responses that perform no SQL and no dashboard mutation
-- Immutable `DashboardVersion` snapshots linked to the assistant message that created them
-- Session create/select/rename/delete, safe database connection workflow, and provider display
-- Responsive chat, high-level agent progress, and context-aware Open Dashboard actions
-- KPI, chart, and table rendering from `DashboardConfig` plus safely refreshed query data
+## Privacy and access
 
-## Architecture
+**Public mode uses browser-session isolation, without account registration.** A signed, HttpOnly cookie identifies the workspace. It is Secure in production and expires after eight hours by default. This does not provide permanent accounts, password recovery, or access across devices.
 
-InsightForge keeps two database responsibilities separate:
+- Your AI key stays in page memory. It is sent to the backend over HTTPS for agent requests, then used by the selected provider adapter. It is not stored in local storage, cookies, or the application database. Reloading requires entering it again.
+- Database passwords are encrypted at rest so later queries and dashboard refreshes can reconnect.
+- Prompts, schema metadata, and any configured query-result samples are shared with the selected AI provider. The hosted entry point defaults to zero sampled result rows.
+- **Erase my private session** removes the visitor's saved connections, messages, dashboards, and query history. Expired workspaces are also cleaned up; execution depends on the deployment being awake. Existing backups follow their own retention policy.
 
-```text
-Client
-  |
-  v
-FastAPI -> Service -> Repository -> App PostgreSQL
-                    sessions, messages, encrypted connection metadata,
-                    schema cache, and dashboard configuration
-  |
-  v
-ExternalDatabaseConnectionManager -> External PostgreSQL
-                                     metadata inspection only in Phase 1
-```
+Public database connections require a publicly reachable PostgreSQL host, port `5432` or `6543`, and `verify-full` TLS. Private networks, loopback addresses, and mixed public/private DNS responses are rejected. Use a database account you are authorized to access with read-only privileges.
 
-The **App Database** belongs to InsightForge. An **External Database** belongs to the user and is reached dynamically using a saved `connection_id`. Credentials are decrypted only inside the backend connection layer; future agent components will never receive raw host credentials.
+See [public visitor mode](deploy/PUBLIC_DEMO.md) for access controls, quotas, and cleanup details.
 
-The Phase 1 request flow follows:
+## Run locally with Docker
 
-```text
-API router -> application service -> repository / database infrastructure
-```
+Requirements: Git and Docker with Docker Compose v2.
 
-The external connection manager creates short-lived connections, applies a timeout, supports PostgreSQL SSL modes, sanitizes driver errors, and closes every connection in a `finally` block.
-
-Phase 2 treats every submitted query, including future AI-generated SQL, as untrusted:
-
-```text
-Client / future LangGraph tool
-             |
-             v
-       SafeQueryService
-             |
-             +--> SQLGlot AST validator
-             +--> QueryPolicy and schema checks
-             +--> query history metadata
-             |
-             v
-       SafeQueryExecutor
-             |
-             +--> READ ONLY transaction
-             +--> PostgreSQL statement_timeout
-             +--> server-side cursor and result limits
-             |
-             v
-ExternalDatabaseConnectionManager
-             |
-             v
-Restricted external PostgreSQL user
-```
-
-The API and future agent will call the same `SafeQueryService`; there is no public generic `execute_any_sql` path.
-
-Phase 3 adds orchestration without weakening that boundary:
-
-```text
-User -> FastAPI -> AgentService -> LangGraph
-                                  |
-                 +----------------+----------------+
-                 |                |                |
-                 v                v                v
-            LLMProvider     Schema Service   SafeQueryService
-                 |                                 |
-                 v                                 v
-          GroqProvider adapter              External PostgreSQL
-```
-
-The graph topology is:
-
-```text
-START -> understand_request -> inspect_schema -> plan_dashboard -> generate_sql
-                                                                  |
-                                                                  v
-                                                             validate_sql
-                                                               /      \
-                                           invalid + retries /        \ valid
-                                                           v            v
-                                                     generate_sql  execute_queries
-                                                                       |
-                                                repairable error -------+
-                                                                       v
-                                                                build_dashboard
-                                                                       |
-                                                                      END
-```
-
-AI nodes are `understand_request`, `plan_dashboard`, `generate_sql`, and `build_dashboard`.
-Schema lookup, validation, execution, retry routing, and persistence are deterministic.
-
-The provider design applies four explicit patterns:
-
-- **Strategy:** `LLMProvider` defines interchangeable model behavior.
-- **Factory:** `LLMFactory` selects the configured provider.
-- **Adapters:** `GroqProvider`, `OpenAIProvider` and `AnthropicProvider` normalize provider clients behind the internal protocol.
-- **Dependency inversion:** graph nodes depend only on `LLMProvider`, never on `ChatGroq`.
-
-Each graph invocation sets `thread_id = session_id`. The App Database remains the durable product
-source of truth for messages and dashboards; Phase 3 does not duplicate chat history in a separate
-checkpoint database.
-
-Phase 4 connects the complete stack as follows:
-
-```text
-                  React
-                    |
-              Session Chat UI
-                    |
-                    v
-                 FastAPI
-                    |
-                    v
-                 LangGraph
-                    |
-       +------------+------------+
-       |                         |
-       v                         v
-   LLMProvider             SafeQueryService
-       |                         |
-       v                         v
-      Groq                  PostgreSQL
-```
-
-The modification path preserves unrelated dashboard state:
-
-```text
-User request -> Intent classifier -> Load current dashboard -> Modification planner
-    -> UI-only? -> Apply deterministic patch
-    -> Data change? -> Generate affected SQL only -> Validate -> Execute
-    -> Apply patch -> Validate DashboardConfig -> Persist dashboard version
-```
-
-## Run With Docker
-
-Requirements: Docker Engine with Docker Compose v2.
-
-```bash
+```sh
+git clone https://github.com/Abderrafea/InsightForge.git
+cd InsightForge
 docker compose up --build
 ```
 
-This starts:
+Open [http://localhost:5173](http://localhost:5173). The default configuration uses the public visitor flow: enter your own AI key in the browser and connect a public PostgreSQL database with verified TLS.
 
-| Service | Purpose | Host port |
-|---|---|---:|
-| `web` | React application and API reverse proxy | `5173` |
-| `api` | FastAPI and automatic Alembic migration | `8001` |
-| `app-db` | InsightForge application PostgreSQL | `5435` |
-| `demo-db` | External ecommerce PostgreSQL | `5434` |
+The development stack binds its published ports to loopback:
 
-Check the service:
+- `5173`: React application and API proxy.
+- `8001`: FastAPI, with local [interactive API documentation](http://localhost:8001/docs).
+- `5435`: application PostgreSQL database.
+- `5434`: bundled ecommerce demo database.
 
-```bash
+Check API liveness with:
+
+```sh
 curl http://localhost:8001/health
 ```
 
-Open the application at [http://localhost:5173](http://localhost:5173). Interactive API
-documentation is available at [http://localhost:8001/docs](http://localhost:8001/docs).
+### Use the bundled ecommerce database
 
-To enable the AI endpoint, configure a Groq model and API key before starting the API:
+The bundled database is private to the Docker network, so use **local owner mode** to analyze it. Create or update a `.env` file at the repository root with your own values:
 
-```bash
+```dotenv
+ACCESS_MODE=owner
 AI_PROVIDER=groq
-AI_MODEL=<a Groq model that supports structured output>
-GROQ_API_KEY=<secret>
-AI_TEMPERATURE=0
-AGENT_MAX_SQL_RETRIES=3
-AGENT_MAX_CONTEXT_MESSAGES=20
-AGENT_MIN_WIDGETS=2
-AGENT_MAX_WIDGETS=8
-AGENT_RESULT_SAMPLE_ROWS=5
+AI_MODEL=<a compatible model available to your account>
+GROQ_API_KEY=<your API key>
 ```
 
-No model name is hardcoded. The API can boot without AI credentials so Phase 1/2 routes remain
-usable, but the agent endpoint returns a clear configuration error until `AI_MODEL` and
-`GROQ_API_KEY` are set.
+For OpenAI or Anthropic, change `AI_PROVIDER` to `openai` or `anthropic` and set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` respectively. Keep `.env` out of Git.
 
-Inside the Docker network, use these demo external-database values:
+Restart the stack with `docker compose up --build`, then enter these **local development credentials** in the connection dialog:
 
 ```text
-host: demo-db
-port: 5432
-database: demo_ecommerce
-username: dashboard_reader
-password: dashboard_reader_dev
-ssl_mode: disable
+Host:      demo-db
+Port:      5432
+Database:  demo_ecommerce
+Username:  dashboard_reader
+Password:  dashboard_reader_dev
+SSL mode:  disable
 ```
 
-From a backend running directly on the host, use `localhost` and port `5434` instead.
+For a backend running directly on your host, use `localhost:5434` instead. These credentials and the Compose encryption key are development examples. Owner mode in development is intended for local use; the production owner deployment uses an authenticated HTTPS gateway.
 
-## Example API Flow
+The application and demo databases use Docker volumes. Stop the stack with `docker compose down` to retain them.
 
-Create a session:
+## Architecture
 
-```bash
-curl -X POST http://localhost:8001/api/sessions \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Sales Analysis"}'
+```mermaid
+flowchart TD
+    UI[React interface] --> API[FastAPI services]
+    API --> APP[(Application PostgreSQL)]
+    API --> GRAPH[LangGraph workflow]
+    GRAPH --> LLM[LLMProvider protocol]
+    LLM --> GROQ[Groq adapter]
+    LLM --> OPENAI[OpenAI adapter]
+    LLM --> ANTHROPIC[Anthropic adapter]
+    GRAPH --> SCHEMA[Schema inspection]
+    GRAPH --> SAFE[SafeQueryService]
+    SCHEMA --> EXTERNAL[(User PostgreSQL database)]
+    SAFE --> VALIDATE[SQLGlot validation]
+    VALIDATE --> EXECUTE[Bounded read-only execution]
+    EXECUTE --> EXTERNAL
 ```
 
-Test the demo connection:
+The **application database** stores visitor identities, sessions, messages, encrypted connection metadata, schema caches, dashboard configurations, versions, and audit metadata. The **analysis database** is the user's PostgreSQL database, accessed through short-lived connections.
 
-```bash
-curl -X POST http://localhost:8001/api/database-connections/test \
-  -H "Content-Type: application/json" \
-  -d '{
-    "host":"demo-db",
-    "port":5432,
-    "database_name":"demo_ecommerce",
-    "username":"dashboard_reader",
-    "password":"dashboard_reader_dev",
-    "ssl_mode":"disable"
-  }'
-```
+The AI workflow handles intent, planning, SQL generation, bounded SQL repair, and dashboard construction. Schema inspection, query policy, execution, and persistence remain application-controlled. Provider adapters hide SDK differences from the workflow; database passwords are not passed to the model.
 
-Save it by sending the same body to `POST /api/database-connections` with `"name":"Ecommerce DB"`. Then attach it and inspect the schema:
+The backend uses FastAPI, SQLAlchemy, psycopg, Alembic, LangGraph, Pydantic, and SQLGlot. The frontend uses React, TypeScript, Vite, Tailwind CSS, and Recharts.
 
-```text
-PUT /api/sessions/{session_id}/database-connection/{connection_id}
-GET /api/database-connections/{connection_id}/schema
-GET /api/database-connections/{connection_id}/schema?refresh=true
-```
+## Query safety
 
-Store and retrieve messages:
+Every analytical query, including AI-generated SQL, passes through the same `SafeQueryService`:
 
-```text
-POST /api/sessions/{session_id}/messages
-GET  /api/sessions/{session_id}/messages
-```
+- PostgreSQL AST parsing with single-statement, read-query enforcement and CTE inspection.
+- Schema-aware table validation, conservative column validation, and blocked system schemas and dangerous functions.
+- Database-enforced read-only transactions and statement timeouts.
+- Limits on SQL length, joins, returned rows, and serialized result size.
+- Validated DNS addresses pinned during connection, with hostname verification preserved for TLS and bounded retries across checked addresses.
+- Sanitized errors and metadata-only query history; query result datasets are not saved as query-history records.
 
-Validate and execute analytical SQL:
+These controls complement a restricted database role. They do not replace database permissions or make every installation-specific SQL function safe.
 
-```text
-POST /api/database-connections/{connection_id}/queries/validate
-POST /api/database-connections/{connection_id}/queries/execute
-POST /api/sessions/{session_id}/queries/execute
-GET  /api/sessions/{session_id}/queries
-```
+## Development and verification
 
-Request body:
+For backend development, use Python 3.12 or 3.13, install the development dependencies, and configure a local environment from [backend/.env.example](backend/.env.example):
 
-```json
-{
-  "sql": "SELECT status, COUNT(*) AS count FROM orders GROUP BY status"
-}
-```
-
-After attaching a database, invoke the dashboard agent:
-
-```bash
-curl -X POST http://localhost:8001/api/sessions/{session_id}/agent/messages \
-  -H "Content-Type: application/json" \
-  -d '{"content":"Build me a sales performance dashboard"}'
-```
-
-The response contains the persisted assistant message and the validated `DashboardConfig`. It does
-not include prompts, credentials, chain-of-thought, or database result datasets.
-
-## API Endpoints
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/health` | Liveness check |
-| `POST` | `/api/sessions` | Create a session |
-| `GET` | `/api/sessions` | List by latest activity |
-| `GET` | `/api/sessions/{id}` | Session, messages, safe connection metadata, and dashboard |
-| `PATCH` | `/api/sessions/{id}` | Rename a session |
-| `DELETE` | `/api/sessions/{id}` | Delete a session |
-| `POST` | `/api/sessions/{id}/messages` | Store a message without calling AI |
-| `GET` | `/api/sessions/{id}/messages` | List messages chronologically |
-| `POST` | `/api/database-connections/test` | Validate external PostgreSQL access |
-| `POST` | `/api/database-connections` | Validate, encrypt, and save a connection |
-| `PUT` | `/api/sessions/{id}/database-connection/{connection_id}` | Select a session's active connection |
-| `GET` | `/api/database-connections/{id}/schema` | Inspect or retrieve cached metadata |
-| `POST` | `/api/database-connections/{id}/queries/validate` | Validate SQL without executing it |
-| `POST` | `/api/database-connections/{id}/queries/execute` | Execute a controlled read query |
-| `POST` | `/api/sessions/{id}/queries/execute` | Execute through a session's connection |
-| `GET` | `/api/sessions/{id}/queries` | List query history newest first |
-| `POST` | `/api/sessions/{id}/agent/messages` | Run the LangGraph dashboard workflow |
-| `GET` | `/api/sessions/{id}/dashboard` | Get dashboard config and safely refreshed query data |
-
-## Example Queries
-
-Revenue:
-
-```sql
-SELECT SUM(total_amount) AS total_revenue
-FROM orders;
-```
-
-Monthly revenue:
-
-```sql
-SELECT
-    DATE_TRUNC('month', created_at) AS month,
-    SUM(total_amount) AS revenue
-FROM orders
-GROUP BY 1
-ORDER BY 1;
-```
-
-Top products:
-
-```sql
-SELECT
-    p.name,
-    SUM(oi.quantity * oi.unit_price) AS revenue
-FROM order_items oi
-JOIN products p ON p.id = oi.product_id
-GROUP BY p.id, p.name
-ORDER BY revenue DESC
-LIMIT 10;
-```
-
-New customers by month:
-
-```sql
-SELECT
-    DATE_TRUNC('month', created_at) AS month,
-    COUNT(*) AS new_customers
-FROM customers
-GROUP BY 1
-ORDER BY 1;
-```
-
-## Local Development
-
-Create an environment and install the backend:
-
-```bash
+```sh
 cd backend
 python -m venv .venv
-source .venv/bin/activate
+# Activate the virtual environment for your shell.
 pip install -e ".[dev]"
-```
-
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`.
-
-Copy `backend/.env.example` to `backend/.env` and adjust the database URL. Generate a new Fernet key instead of using the development example:
-
-```bash
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-
-Apply migrations and run the API:
-
-```bash
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Create new migrations with:
+Use `uvicorn app.main:app` for local development. The configured `app.cloud:app` entry point is for a hosted production environment. On Windows, psycopg asynchronous connections require a selector event loop; Docker provides the Linux path for the complete test suite and migrations.
 
-```bash
-alembic revision --autogenerate -m "describe the change"
-```
+For frontend development against an API on port `8000`:
 
-Run the frontend locally against an API on port `8000`:
-
-```bash
+```sh
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-The Vite development server is available at `http://localhost:5173`. Production Docker uses nginx
-to serve the built assets and proxy `/api` directly to the internal API service.
+Run backend unit, API, and PostgreSQL integration tests from the repository root:
 
-## Phase 4 UI Reference
-
-The session layout follows the supplied [`design.png`](design.png) reference: a 284px desktop
-sidebar, chat-focused main area, right-aligned user messages, assistant dashboard actions, and a
-bottom composer. The sketch was translated into a responsive operational interface rather than
-copied literally. Mobile uses an accessible sidebar drawer and a single-column dashboard.
-
-The palette is implemented as Tailwind design tokens:
-
-```text
-#2F4157  primary text and commands
-#567C8E  secondary actions and icons
-#A2C1D1  borders and selection accents
-#C7D9E5  secondary surfaces
-#E3ECF2  selected and light surfaces
-#F3F6F9  application canvas
+```sh
+docker compose --profile test run --build --rm tests
+docker compose --profile test run --rm tests ruff check --no-cache app tests
 ```
 
-## Tests
+Run frontend checks:
 
-Fast unit and API tests use an isolated SQLite App Database and mock only the external PostgreSQL boundary:
-
-```bash
-cd backend
-pytest -q
-ruff check .
-```
-
-Run the complete suite, including schema discovery against the Dockerized PostgreSQL demo database:
-
-```bash
-docker compose --profile test run --rm tests
-```
-
-Run the frontend tests and production type/build check:
-
-```bash
+```sh
 cd frontend
+npm ci
 npm test
 npm run build
+npm audit --audit-level=low
 ```
 
-The backend suite also tests provider selection, graph flow, SQL repair, retry exhaustion,
-line-to-bar edits without SQL, partial monthly-to-weekly query updates, KPI addition, widget
-removal, top-five limits, clarification, version creation, session isolation, provider failure
-sanitization, and credential isolation. PostgreSQL integration tests execute SELECT, aggregate,
-GROUP BY, JOIN, CTE, ORDER BY, limit, timeout, type-serialization, and payload-limit scenarios.
-They verify that `dashboard_reader` cannot INSERT, UPDATE, DELETE, DROP, ALTER, or CREATE.
+GitHub Actions runs backend PostgreSQL tests and lint, plus frontend tests, the production build, and dependency auditing. Tests cover SQL restrictions, visitor isolation, encrypted credentials, provider adapters, dashboard generation and editing, version persistence, production access checks, and deployment configuration.
 
-The frontend suite covers session rendering and creation, selection, dashboard actions, composer
-keyboard behavior, loading progress, empty state, and disconnected database state.
+Provider calls are mocked in the default suite. The optional live Groq integration test requires your own configured key and model:
 
-A real Groq structured-output smoke test exists but is disabled by default. Run it only with valid
-AI configuration:
-
-```bash
+```sh
+cd backend
 RUN_GROQ_INTEGRATION_TESTS=1 pytest -q tests/integration/test_groq_provider.py
 ```
 
-## Security Expectations
+A separate smoke test of the hosted application has exercised schema inspection, read-only SQL, write-query rejection, live Groq generation of two widgets, and dashboard data retrieval using synthetic sales data. OpenAI and Anthropic adapters have been tested with mocks; live calls to those providers require their own keys.
 
-- Create a dedicated read-only PostgreSQL user for every external database. Never use `postgres`, a superuser, or the database owner.
-- Generate a unique `SECRET_ENCRYPTION_KEY` for each environment and keep it in a secret manager.
-- Passwords and encrypted password values are excluded from every response schema.
-- Validation responses omit rejected input values because those inputs may contain credentials.
-- External errors are mapped to safe messages; raw driver exceptions are never returned.
-- SSL modes are supported. Production deployments should normally use `verify-full` with trusted certificates.
-- The demo credentials are local-development values and must not be reused elsewhere.
-- SQLGlot parses the complete PostgreSQL statement; validation does not use prefix checks.
-- Only one root read query is accepted, while mutation nodes inside CTEs are also rejected.
-- System schemas and a configurable defense-in-depth list of dangerous functions are blocked.
-- Every analytical query runs in a database-enforced read-only transaction.
-- PostgreSQL enforces the statement timeout; Python also provides a secondary deadline.
-- Named server-side cursors stream bounded batches. The executor fetches one extra row to report truncation and never rewrites aggregate or CTE semantics.
-- Query history stores SQL and sanitized metadata, never result datasets or credentials.
-- Agent state contains IDs, schema metadata, plans, SQL, bounded result samples, and dashboard
-  configuration, but never database passwords, encrypted passwords, or secret-bearing URLs.
-- Visitor keys remain in page memory and are sent only to the selected provider adapter for agent requests. Owner keys stay in server configuration.
-- Every AI-generated query is revalidated and executed by Phase 2's `SafeQueryService`.
-- Generated dashboards must pass Pydantic structure, reference, and result-field validation before
-  storage.
-- UI-only modifications never call SQL generation or `SafeQueryService.execute`.
-- Session responses expose a connection summary but do not expose host, username, password, or a
-  connection string. Connection form credentials live only for the lifetime of the open dialog.
-- Standard logs contain provider/model/run metadata, never prompt internals or query results.
+## Deployment and API guides
 
-Metadata inspection remains separate from analytical query execution and uses PostgreSQL catalogs without reading customer table rows.
+- [FastAPI Cloud and Neon](deploy/FASTAPI_CLOUD.md): current hosted setup, frontend packaging, secrets, migrations, and release checks.
+- [Public visitor mode](deploy/PUBLIC_DEMO.md): visitor-supplied keys, browser-session isolation, erasure, and limits.
+- [AI providers and models](deploy/AI_PROVIDERS.md): adapter behavior, suggested models, and custom model IDs.
+- [Docker server deployment](deploy/README.md): HTTPS gateway, owner access, secrets, backups, and restore.
+- [Render and Neon](deploy/RENDER.md): alternative single-container deployment configuration. The current live application is hosted on FastAPI Cloud.
 
-## Known Limitations
+For API clients, public mode starts with `POST /api/access` and the returned visitor cookie. State-changing requests require `X-Requested-With: InsightForge`. Agent requests additionally carry `Authorization: Bearer <key>`, `X-AI-Provider`, and `X-AI-Model`. The browser client handles these headers.
 
-- Static column validation is intentionally conservative. Qualified columns are checked only when their physical table binding is unambiguous; PostgreSQL reports complex scope errors at execution time.
-- SQL functions can have installation-specific side effects that an AST cannot infer. The denied-function list, read-only transaction, and restricted database role must remain layered together.
-- Result byte limiting is a practical serialized-response approximation. A bounded cursor batch may briefly hold more data than the final response limit.
-- Query parameters are supported by the private executor boundary but are not exposed through the Phase 2 API.
-- Query history is session-scoped in the public API; direct connection executions are persisted with a null session for future audit tooling.
-- Groq, OpenAI and Anthropic are implemented. Other provider names fail explicitly.
-- Provider calls are request/response based; streaming, cancellation, background runs, and durable
-  LangGraph checkpoints are not included.
-- The dashboard builder sees column metadata and a configurable small sample of already bounded
-  query results so it can bind chart fields correctly.
-- Version snapshots are persisted, but version browsing and rollback controls are not exposed in
-  the Phase 4 UI.
-- Contextual reference resolution depends on the configured model's structured output; ambiguous
-  matches are deliberately returned as clarification questions.
+The main flow is connection test/save, schema inspection, session creation, connection attachment, and `POST /api/sessions/{id}/agent/messages`. Retrieve the rendered dashboard data through `GET /api/sessions/{id}/dashboard`. `DELETE /api/access` erases the visitor workspace. Interactive API documentation is enabled in development and disabled in production.
 
-## Deferred To Phase 5
+## Current limits
 
-Potential Phase 5 work includes response streaming, cancellation, version history/rollback UI,
-additional provider adapters, richer dashboard interaction, and multi-user authentication. RAG,
-embeddings, multi-agent orchestration, billing, scheduling, and unrelated enterprise infrastructure
-remain intentionally out of scope unless a future phase explicitly calls for them.
+- PostgreSQL is the supported analysis database.
+- Model compatibility depends on structured-output support and access granted to the supplied key. Suggested models are not an exhaustive catalog; provider billing belongs to the key owner's account.
+- Public mode provides temporary browser workspaces rather than permanent user accounts.
+- Provider calls use request/response execution; streaming, cancellation, and background agent runs are not implemented.
+- Dashboard version snapshots are stored, but version browsing and rollback controls are not exposed in the UI.
+- Column validation is deliberately conservative for complex SQL scopes; PostgreSQL still validates queries at execution time.
+- Hosting can scale to zero, and free-plan quotas can affect availability. Independent scheduled off-site backups must be configured separately.
